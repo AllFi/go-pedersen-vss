@@ -1,0 +1,8 @@
+module github.com/AllFi/go-pedersen-vss
+
+go 1.14
+
+require (
+	github.com/ing-bank/zkrp v0.0.0-20200519071134-97a3cddb5627
+	github.com/stretchr/testify v1.4.0
+)
