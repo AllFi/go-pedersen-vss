@@ -8,10 +8,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSimple(t *testing.T) {
+func TestBase(t *testing.T) {
 	h := types.RandomPoint("123")
-	trials := 1
-	n := 3
+	trials := 20
+	n := 20
 
 	var k int
 	var secret types.Fn
@@ -20,7 +20,7 @@ func TestSimple(t *testing.T) {
 
 	for i := 0; i < trials; i++ {
 		// Create a random sharing.
-		k = randRange(1, n)
+		k = randRange(1, n-1)
 		secret = types.RandomFn()
 		vshares, c, err := VShareSecret(indices, h, secret, k)
 		assert.NoError(t, err)
@@ -31,8 +31,39 @@ func TestSimple(t *testing.T) {
 		}
 
 		shuffle(vshares)
-		openedSecret := Open(vshares[:k])
+		openedSecret := Open(vshares[:k+1])
 		assert.Equal(t, secret, openedSecret)
+	}
+}
+
+func BenchmarkVSShare(b *testing.B) {
+	n := 100
+	k := 33
+	h := types.RandomPoint("123")
+
+	indices := randomIndices(n)
+	secret := types.RandomFn()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, _ = VShareSecret(indices, h, secret, k)
+	}
+}
+
+func BenchmarkVSSVerify(b *testing.B) {
+	n := 100
+	k := 33
+	h := types.RandomPoint("123")
+
+	indices := randomIndices(n)
+	secret := types.RandomFn()
+	vshares, c, _ := VShareSecret(indices, h, secret, k)
+	ind := rand.Intn(n)
+	share := vshares[ind]
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		IsValid(h, &c, &share)
 	}
 }
 
@@ -48,7 +79,7 @@ func randRange(lower, upper int) int {
 	return rand.Intn(upper+1-lower) + lower
 }
 
-func shuffle(shares types.VerifiableShares) {
+func shuffle(shares []types.VerifiableShare) {
 	rand.Shuffle(len(shares), func(i, j int) {
 		shares[i], shares[j] = shares[j], shares[i]
 	})

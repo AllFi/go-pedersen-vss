@@ -19,15 +19,15 @@ func VShareSecret(
 	secret types.Fn,
 	k int,
 ) (
-	vshares types.VerifiableShares,
+	vshares []types.VerifiableShare,
 	c types.Commitment,
 	err error,
 ) {
 	n := len(indices)
-	vshares = make(types.VerifiableShares, n)
+	vshares = make([]types.VerifiableShare, n)
 	c = make(types.Commitment, 0, n)
 
-	shares := make(types.Shares, n)
+	shares := make([]types.Share, n)
 	coeffs := make([]types.Fn, k)
 
 	err = shareAndGetCoeffs(&shares, coeffs, indices, secret, k)
@@ -79,7 +79,7 @@ func IsValid(h types.Point, c *types.Commitment, vshare *types.VerifiableShare) 
 //	- There are at least k shares.
 //	- All shares are valid, in the sense that they have not been maliciously
 //		modified.
-func Open(shares types.VerifiableShares) types.Fn {
+func Open(shares []types.VerifiableShare) types.Fn {
 	num, denom, res, tmp := types.NewFn(), types.NewFn(), types.NewFn(), types.NewFn()
 	res.SetInt64(0)
 	for i := range shares {
@@ -119,7 +119,7 @@ func evaluate(eval *types.Point, c *types.Commitment, index *types.Fn) {
 // Panics: This function will panic if the destination shares slice has a
 // capacity less than n (the number of indices) or the coefficients slice has
 // length less than k, or any of the given indices is the zero element.
-func shareAndGetCoeffs(dst *types.Shares, coeffs, indices []types.Fn, secret types.Fn, k int) error {
+func shareAndGetCoeffs(dst *[]types.Share, coeffs, indices []types.Fn, secret types.Fn, k int) error {
 	for _, index := range indices {
 		if index.IsZero() {
 			panic("cannot create share for index zero")
