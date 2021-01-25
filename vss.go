@@ -6,6 +6,59 @@ import (
 	"github.com/AllFi/go-pedersen-vss/types"
 )
 
+// VShareSecret creates verifiable Shamir shares for the given secret at the
+// given threshold, and returns the shares and the commitment. In the returned Shares, there will be one share for each index
+// in the indices that were used to construct the Sharer.
+//
+// Panics: This function will panic if the destination shares slice has a
+// capacity less than n (the number of indices), or if the destination
+// commitment has a capacity less than k.
+func VShareSecret(
+	indices []types.Fn,
+	h types.Point,
+	secret types.Fn,
+	k int,
+) (
+	vshares types.VerifiableShares,
+	c types.Commitment,
+	err error,
+) {
+	n := len(indices)
+	vshares = make(types.VerifiableShares, n)
+	c = make(types.Commitment, 0, n)
+
+	shares := make(types.Shares, n)
+	coeffs := make([]types.Fn, k)
+
+	err = shareAndGetCoeffs(&shares, coeffs, indices, secret, k)
+	if err != nil {
+		return
+	}
+
+	// At this point, the sharer should still have the randomly picked
+	// coefficients in its cache, which we need to use for the commitment.
+	c = c[:k]
+	for i, coeff := range coeffs {
+		c[i] = types.NewPoint()
+		c[i].BaseExp(&coeff)
+	}
+
+	setRandomCoeffs(coeffs, types.RandomFn(), k)
+	for i, ind := range indices {
+		vshares[i].Share = shares[i]
+		polyEval(&vshares[i].Decommitment, &ind, coeffs)
+	}
+
+	// Finish the computation of the commitments
+	hPow := types.NewPoint()
+	for i, coeff := range coeffs {
+		hPow.Scale(&h, &coeff)
+		c[i].Add(&c[i], &hPow)
+	}
+
+	return
+}
+
 // IsValid returns true when the given verifiable share is valid with regard to
 // the given commitment, and false otherwise.
 func IsValid(h types.Point, c *types.Commitment, vshare *types.VerifiableShare) bool {
@@ -18,6 +71,37 @@ func IsValid(h types.Point, c *types.Commitment, vshare *types.VerifiableShare) 
 	return gPow.Eq(&eval)
 }
 
+// Open computes the secret corresponding to the given shares. This is
+// equivalent to interpolating the polynomial that passes through the given
+// points, and returning the constant term. It is assumed that all shares have
+// different indices. Further properties that need to be hold if this function
+// is to correctly reconstruct the secret for a sharing with threshoold k are:
+//	- There are at least k shares.
+//	- All shares are valid, in the sense that they have not been maliciously
+//		modified.
+func Open(shares types.VerifiableShares) types.Fn {
+	num, denom, res, tmp := types.NewFn(), types.NewFn(), types.NewFn(), types.NewFn()
+	res.SetInt64(0)
+	for i := range shares {
+		num.SetInt64(1)
+		denom.SetInt64(1)
+		for j := range shares {
+			if shares[i].Share.Index.Eq(&shares[j].Share.Index) {
+				continue
+			}
+			tmp.Negate(&shares[i].Share.Index)
+			tmp.Add(&tmp, &shares[j].Share.Index)
+			denom.Mul(&denom, &tmp)
+			num.Mul(&num, &shares[j].Share.Index)
+		}
+		denom.Inverse(&denom)
+		tmp.Mul(&num, &denom)
+		tmp.Mul(&tmp, &shares[i].Share.Value)
+		res.Add(&res, &tmp)
+	}
+	return res
+}
+
 // Evaluates the sharing polynomial at the given index "in the exponent".
 func evaluate(eval *types.Point, c *types.Commitment, index *types.Fn) {
 	*eval = (*c)[len(*c)-1].Copy()
@@ -27,55 +111,7 @@ func evaluate(eval *types.Point, c *types.Commitment, index *types.Fn) {
 	}
 }
 
-// VShareSecret creates verifiable Shamir shares for the given secret at the
-// given threshold, and stores the shares and the commitment in the given
-// destinations. In the returned Shares, there will be one share for each index
-// in the indices that were used to construct the Sharer.
-//
-// Panics: This function will panic if the destination shares slice has a
-// capacity less than n (the number of indices), or if the destination
-// commitment has a capacity less than k.
-func VShareSecret(
-	vshares *types.VerifiableShares,
-	c *types.Commitment,
-	indices []types.Fn,
-	h types.Point,
-	secret types.Fn,
-	k int,
-) error {
-	n := len(indices)
-	shares := make(types.Shares, n)
-	coeffs := make([]types.Fn, k)
-	err := ShareAndGetCoeffs(&shares, coeffs, indices, secret, k)
-	if err != nil {
-		return err
-	}
-
-	// At this point, the sharer should still have the randomly picked
-	// coefficients in its cache, which we need to use for the commitment.
-	*c = (*c)[:k]
-	for i, coeff := range coeffs {
-		(*c)[i] = types.NewPoint()
-		(*c)[i].BaseExp(&coeff)
-	}
-
-	setRandomCoeffs(coeffs, types.RandomFn(), k)
-	for i, ind := range indices {
-		(*vshares)[i].Share = shares[i]
-		polyEval(&(*vshares)[i].Decommitment, &ind, coeffs)
-	}
-
-	// Finish the computation of the commitments
-	hPow := types.NewPoint()
-	for i, coeff := range coeffs {
-		hPow.Scale(&h, &coeff)
-		(*c)[i].Add(&(*c)[i], &hPow)
-	}
-
-	return nil
-}
-
-// ShareAndGetCoeffs is the same as ShareSecret, but uses the provided slice to
+// shareAndGetCoeffs is the same as ShareSecret, but uses the provided slice to
 // store the generated coefficients of the sharing polynomial. If this function
 // successfully returns, this slice will contain the coefficients of the
 // sharing polynomial, where index 0 is the constant term.
@@ -83,7 +119,7 @@ func VShareSecret(
 // Panics: This function will panic if the destination shares slice has a
 // capacity less than n (the number of indices) or the coefficients slice has
 // length less than k, or any of the given indices is the zero element.
-func ShareAndGetCoeffs(dst *types.Shares, coeffs, indices []types.Fn, secret types.Fn, k int) error {
+func shareAndGetCoeffs(dst *types.Shares, coeffs, indices []types.Fn, secret types.Fn, k int) error {
 	for _, index := range indices {
 		if index.IsZero() {
 			panic("cannot create share for index zero")

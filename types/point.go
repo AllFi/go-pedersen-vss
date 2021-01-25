@@ -11,6 +11,7 @@ type Point struct {
 	*p256.P256
 }
 
+// NewPoint returns a new point on the elliptic curve
 func NewPoint() Point {
 	p := Point{new(p256.P256)}
 	p.X = big.NewInt(0)
@@ -24,20 +25,21 @@ func RandomPoint(seed string) Point {
 	return Point{p}
 }
 
-func (point *Point) Copy() Point {
-	p := NewPoint()
-	p.X.Set(point.X)
-	p.Y.Set(point.Y)
-	return p
+// Copy returns a copy of the point on the elliptic curve
+func (p *Point) Copy() Point {
+	c := NewPoint()
+	c.X.Set(p.X)
+	c.Y.Set(p.Y)
+	return c
 }
 
 // BaseExp computes the scalar multiplication of the canonical generator of the
 // curve by the given scalar.
-func (point *Point) BaseExp(scalar *Fn) {
+func (p *Point) BaseExp(scalar *Fn) {
 	if scalar == nil {
 		panic("expected first argument to not be nil")
 	}
-	point.ScalarBaseMult(scalar.Int)
+	p.ScalarBaseMult(scalar.Int)
 }
 
 // Scale computes the scalar multiplication of the given curve point by the
@@ -72,5 +74,4 @@ func (p *Point) Eq(other *Point) bool {
 	sub := NewPoint()
 	sub.Multiply(p.P256, other.ScalarMult(other.P256, big.NewInt(-1)))
 	return sub.IsZero()
-	//return p.X.Cmp(other.X) == 0 && p.Y.Cmp(other.Y) == 0
 }

@@ -17,20 +17,22 @@ func TestSimple(t *testing.T) {
 	var secret types.Fn
 
 	indices := randomIndices(n)
-	vshares := make(types.VerifiableShares, n)
-	c := make(types.Commitment, 0, n)
 
 	for i := 0; i < trials; i++ {
 		// Create a random sharing.
 		k = randRange(1, n)
 		secret = types.RandomFn()
-		err := VShareSecret(&vshares, &c, indices, h, secret, k)
+		vshares, c, err := VShareSecret(indices, h, secret, k)
 		assert.NoError(t, err)
 
 		// Check that all shares are valid.
 		for _, share := range vshares {
 			assert.True(t, IsValid(h, &c, &share))
 		}
+
+		shuffle(vshares)
+		openedSecret := Open(vshares[:k])
+		assert.Equal(t, secret, openedSecret)
 	}
 }
 
@@ -44,4 +46,10 @@ func randomIndices(n int) []types.Fn {
 
 func randRange(lower, upper int) int {
 	return rand.Intn(upper+1-lower) + lower
+}
+
+func shuffle(shares types.VerifiableShares) {
+	rand.Shuffle(len(shares), func(i, j int) {
+		shares[i], shares[j] = shares[j], shares[i]
+	})
 }
