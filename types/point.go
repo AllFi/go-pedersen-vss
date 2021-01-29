@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"encoding/hex"
 
 	"github.com/olegabu/go-secp256k1-zkp"
 	"github.com/pkg/errors"
@@ -39,7 +40,7 @@ func RandomPoint() Point {
 
 // Copy returns a copy of the point on the elliptic curve
 func (p *Point) Copy() Point {
-	_, pk, err := secp256k1.EcPubkeyParse(context, p.Bytes(context))
+	_, pk, err := secp256k1.EcPubkeyParse(context, p.Bytes())
 	if err != nil {
 		panic(err)
 	}
@@ -105,15 +106,38 @@ func (p *Point) Add(a, b *Point) {
 
 // Eq returns true if the two curve points are equal, and false otherwise.
 func (p *Point) Eq(other *Point) bool {
-	_, left, err := secp256k1.EcPubkeySerialize(context, p.PublicKey, secp256k1.EcCompressed)
+	return bytes.Equal(p.Bytes(), other.Bytes())
+}
+
+// Bytes returns the absolute value of p as a big-endian byte slice.
+func (p Point) Bytes() []byte {
+	_, bytes, err := secp256k1.EcPubkeySerialize(context, p.PublicKey, secp256k1.EcCompressed)
 	if err != nil {
 		panic(err)
 	}
+	return bytes
+}
 
-	_, right, err := secp256k1.EcPubkeySerialize(context, other.PublicKey, secp256k1.EcCompressed)
+// HexFnSize is the size of hex representation of Point
+const HexPointSize = secp256k1.LenCompressed * 2
+
+// Hex returns the hex-string representation of p.
+func (p Point) Hex() string {
+	return hex.EncodeToString(p.Bytes())
+}
+
+// SetHex sets p to the value of s
+func (p *Point) SetHex(s string) (err error) {
+	b, err := hex.DecodeString(s)
 	if err != nil {
-		panic(err)
+		return
 	}
 
-	return bytes.Equal(left, right)
+	_, pk, err := secp256k1.EcPubkeyParse(context, b)
+	if err != nil {
+		return
+	}
+
+	p.PublicKey = pk
+	return
 }

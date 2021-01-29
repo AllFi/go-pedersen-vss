@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/hex"
 	"math/big"
 )
 
@@ -81,4 +82,22 @@ func (fn Fn) Bytes() []byte {
 		b = bytes.Join([][]byte{make([]byte, 32-len(b)), b}, nil)
 	}
 	return b
+}
+
+// HexFnSize is the size of hex representation of Fn
+const HexFnSize = 64
+
+// Hex returns the hex-string representation of fn.
+func (fn Fn) Hex() string {
+	return hex.EncodeToString(fn.Bytes())
+}
+
+// SetHex sets fn to the value of s
+func (fn *Fn) SetHex(s string) (err error) {
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		return
+	}
+	fn.Int = new(big.Int).SetBytes(b)
+	return
 }
