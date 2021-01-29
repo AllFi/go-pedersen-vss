@@ -9,7 +9,7 @@ import (
 )
 
 func TestBase(t *testing.T) {
-	h := types.RandomPoint("123")
+	h := types.RandomPoint()
 	trials := 20
 	n := 20
 
@@ -39,7 +39,7 @@ func TestBase(t *testing.T) {
 func BenchmarkVSShare(b *testing.B) {
 	n := 100
 	k := 33
-	h := types.RandomPoint("123")
+	h := types.RandomPoint()
 
 	indices := randomIndices(n)
 	secret := types.RandomFn()
@@ -53,7 +53,7 @@ func BenchmarkVSShare(b *testing.B) {
 func BenchmarkVSSVerify(b *testing.B) {
 	n := 100
 	k := 33
-	h := types.RandomPoint("123")
+	h := types.RandomPoint()
 
 	indices := randomIndices(n)
 	secret := types.RandomFn()

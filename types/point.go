@@ -1,36 +1,49 @@
 package types
 
 import (
-	"math/big"
+	"bytes"
 
-	"github.com/ing-bank/zkrp/crypto/p256"
+	"github.com/olegabu/go-secp256k1-zkp"
+	"github.com/pkg/errors"
 )
+
+var context *secp256k1.Context
+
+func init() {
+	var err error
+	context, err = secp256k1.ContextCreate(secp256k1.ContextBoth)
+	if err != nil {
+		err = errors.Wrap(err, "cannot create secp256k1.Context")
+		panic(err)
+	}
+}
 
 // Point represents a point (group element) on the secp256k1 elliptic curve.
 type Point struct {
-	*p256.P256
+	*secp256k1.PublicKey
 }
 
 // NewPoint returns a new point on the elliptic curve
 func NewPoint() Point {
-	p := Point{new(p256.P256)}
-	p.X = big.NewInt(0)
-	p.Y = big.NewInt(0)
-	return p
+	return Point{}
 }
 
 // RandomPoint generates a random point on the elliptic curve.
-func RandomPoint(seed string) Point {
-	p, _ := p256.MapToGroup(seed)
-	return Point{p}
+func RandomPoint() Point {
+	_, pk, err := secp256k1.EcPubkeyCreate(context, RandomFn().Bytes())
+	if err != nil {
+		panic(err)
+	}
+	return Point{pk}
 }
 
 // Copy returns a copy of the point on the elliptic curve
 func (p *Point) Copy() Point {
-	c := NewPoint()
-	c.X.Set(p.X)
-	c.Y.Set(p.Y)
-	return c
+	_, pk, err := secp256k1.EcPubkeyParse(context, p.Bytes(context))
+	if err != nil {
+		panic(err)
+	}
+	return Point{pk}
 }
 
 // BaseExp computes the scalar multiplication of the canonical generator of the
@@ -39,7 +52,13 @@ func (p *Point) BaseExp(scalar *Fn) {
 	if scalar == nil {
 		panic("expected first argument to not be nil")
 	}
-	p.ScalarBaseMult(scalar.Int)
+
+	var err error
+	_, p.PublicKey, err = secp256k1.EcPubkeyCreate(context, scalar.Bytes())
+	if err != nil {
+		panic(err)
+	}
+	return
 }
 
 // Scale computes the scalar multiplication of the given curve point by the
@@ -54,7 +73,11 @@ func (p *Point) Scale(a *Point, scalar *Fn) {
 		panic("expected second argument to not be nil")
 	}
 
-	p.ScalarMult(a.P256, scalar.Int)
+	p.PublicKey = a.Copy().PublicKey
+	_, err := secp256k1.EcPubkeyTweakMul(context, p.PublicKey, scalar.Bytes())
+	if err != nil {
+		panic(err)
+	}
 }
 
 // Add computes the curve addition of the two given curve points.
@@ -66,12 +89,31 @@ func (p *Point) Add(a, b *Point) {
 		panic("expected second argument to be not be nil")
 	}
 
-	p.Multiply(a.P256, b.P256)
+	publicKeys := make([]*secp256k1.PublicKey, 0)
+	for _, point := range []*Point{a, b} {
+		if point.PublicKey != nil {
+			publicKeys = append(publicKeys, point.PublicKey)
+		}
+	}
+
+	var err error
+	_, p.PublicKey, err = secp256k1.EcPubkeyCombine(context, publicKeys)
+	if err != nil {
+		panic(err)
+	}
 }
 
 // Eq returns true if the two curve points are equal, and false otherwise.
 func (p *Point) Eq(other *Point) bool {
-	sub := NewPoint()
-	sub.Multiply(p.P256, other.ScalarMult(other.P256, big.NewInt(-1)))
-	return sub.IsZero()
+	_, left, err := secp256k1.EcPubkeySerialize(context, p.PublicKey, secp256k1.EcCompressed)
+	if err != nil {
+		panic(err)
+	}
+
+	_, right, err := secp256k1.EcPubkeySerialize(context, other.PublicKey, secp256k1.EcCompressed)
+	if err != nil {
+		panic(err)
+	}
+
+	return bytes.Equal(left, right)
 }
