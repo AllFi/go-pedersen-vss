@@ -38,6 +38,27 @@ func RandomPoint() Point {
 	return Point{pk}
 }
 
+// GeneratorH returns alternate secp256k1 generator, used in Elements Alpha
+func GeneratorH() Point {
+	/** Alternate secp256k1 generator, used in Elements Alpha.
+	*  Computed as the hash of the above G, DER-encoded with 0x04 (uncompressed pubkey) as its flag byte.
+	*  import hashlib
+	*  C = EllipticCurve ([F (0), F (7)])
+	*  G_bytes = '0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8'.decode('hex')
+	*  H = C.lift_x(int(hashlib.sha256(G_bytes).hexdigest(),16))
+	 */
+	var hBytes = [65]byte{0x04,
+		0x50, 0x92, 0x9b, 0x74, 0xc1, 0xa0, 0x49, 0x54, 0xb7, 0x8b, 0x4b, 0x60, 0x35, 0xe9, 0x7a, 0x5e,
+		0x07, 0x8a, 0x5a, 0x0f, 0x28, 0xec, 0x96, 0xd5, 0x47, 0xbf, 0xee, 0x9a, 0xce, 0x80, 0x3a, 0xc0,
+		0x31, 0xd3, 0xc6, 0x86, 0x39, 0x73, 0x92, 0x6e, 0x04, 0x9e, 0x63, 0x7c, 0xb1, 0xb5, 0xf4, 0x0a,
+		0x36, 0xda, 0xc2, 0x8a, 0xf1, 0x76, 0x69, 0x68, 0xc3, 0x0c, 0x23, 0x13, 0xf3, 0xa3, 0x89, 0x04}
+	_, pk, err := secp256k1.EcPubkeyParse(context, hBytes[:])
+	if err != nil {
+		panic(err)
+	}
+	return Point{pk}
+}
+
 // Copy returns a copy of the point on the elliptic curve
 func (p *Point) Copy() Point {
 	_, pk, err := secp256k1.EcPubkeyParse(context, p.Bytes())

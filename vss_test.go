@@ -31,7 +31,7 @@ func TestBase(t *testing.T) {
 		}
 
 		shuffle(vshares)
-		openedSecret := Open(vshares[:k+1])
+		openedSecret := Open(vshares[:k])
 		assert.Equal(t, secret, openedSecret)
 	}
 }
